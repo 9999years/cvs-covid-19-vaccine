@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from types import TracebackType
 from typing import Dict, Optional, ContextManager, Type, Any, List
+import sys
 
 import requests
 
@@ -160,22 +161,33 @@ class CvsStatus:
 
 
 def main() -> None:
+    def parse_state(state: str) -> UsState:
+        ret = UsState.from_abbr(state.upper())
+        if ret is None:
+            raise ValueError
+        else:
+            return ret
+
     parser = ArgumentParser(
         description="""Find COVID-19 vaccine availabilities in a particular state"""
     )
     parser.add_argument(
         "state",
-        type=UsState.get_abbr,
+        type=parse_state,
         help="""Two-letter US state code; e.g. MA, NH, WA...""",
     )
     args = parser.parse_args()
 
     sess = Session()
-    state = args.state()
+    state = args.state
     data = state.get_info(sess)
 
     any_available = False
-    cities = data.payload.data[state]
+    if state not in data.payload.data:
+        print("CVS does not (yet...?) provide the COVID-19 vaccine in", state.value.title())
+        sys.exit(1)
+    else:
+        cities = data.payload.data[state]
 
     for city in cities:
         if city.status != BookingStatus.full:
