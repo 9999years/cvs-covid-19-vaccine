@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from argparse import ArgumentParser
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from types import TracebackType
 from typing import Dict, Optional, ContextManager, Type, Any, List
@@ -9,6 +10,7 @@ import sys
 
 import requests
 
+LOCAL_TZ = datetime.now().astimezone().tzinfo 
 BASE_URL = "https://www.cvs.com/immunizations/covid-19-vaccine"
 
 
@@ -129,7 +131,7 @@ class VaccineInfo:
     @classmethod
     def from_json(cls, obj: Dict[str, Any]) -> VaccineInfo:
         return cls(
-            current_time=obj["currentTime"],
+            current_time=datetime.fromisoformat(obj["currentTime"]).replace(tzinfo=timezone(timedelta(hours=-6))),
             is_booking_completed=obj["isBookingCompleted"],
             data={
                 UsState.from_abbr(state): [
@@ -182,9 +184,12 @@ def main() -> None:
     state = args.state
     data = state.get_info(sess)
 
+    print(f'Status as of {data.payload.current_time.astimezone(LOCAL_TZ)}. Availability can change quickly based on demand.')
+
     any_available = False
     if state not in data.payload.data:
         print("CVS does not (yet...?) provide the COVID-19 vaccine in", state.value.title())
+        print("For more information, see: https://www.cvs.com/immunizations/covid-19-vaccine")
         sys.exit(1)
     else:
         cities = data.payload.data[state]
@@ -194,13 +199,17 @@ def main() -> None:
             print("Available:", city.city)
             any_available = True
 
-    if not any_available:
+    if any_available:
+        print('Schedule an appointment now: https://www.cvs.com/vaccine/intake/store/covid-screener/covid-qns')
+    else:
         print(
             "No availabilities found; checked",
             len(cities),
             "CVS locations in",
             state.value.title(),
         )
+
+    print('More information: https://www.cvs.com/immunizations/covid-19-vaccine')
 
 
 if __name__ == "__main__":
